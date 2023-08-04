@@ -1,0 +1,12 @@
+{
+	"main": "index.html",
+	"logo": "logo.png",
+    "preload": "utools/preload.js",
+	"features": [
+		{
+		  "code": "nock",
+		  "explain": "闹克提醒",
+			"cmds":["nock", "nocknock"]
+		}
+	]
+}
