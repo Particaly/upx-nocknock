@@ -1,4 +1,6 @@
 import { createRouter, createWebHashHistory } from 'vue-router'
+import Home from '../views/home/index.vue'
+import Clock from '../views/clock/index.vue'
 
 const router = createRouter({
     history: createWebHashHistory(),
@@ -6,12 +8,12 @@ const router = createRouter({
         {
             name: 'home',
             path: '/',
-            component: () => import('@/views/home/index.vue')
+            component: Home
         },
         {
             name: 'clock',
             path: '/clock',
-            component: () => import('@/views/clock/index.vue')
+            component: Clock
         },
     ]
 });

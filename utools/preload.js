@@ -31,6 +31,11 @@ function readConfig() {
     if (config) return config;
     config = utools.dbStorage.getItem('config')
     if (config) {
+        config.forEach(t => {
+            if (t.week && !Array.isArray(t.week)) {
+                t.week = null
+            }
+        })
         return config;
     } else {
         const defaultData = [
@@ -38,7 +43,7 @@ function readConfig() {
                 mode: notifyMode.eachDay,
                 time: '08:27',
                 week: null,
-                date: '',
+                date: null,
                 title: '上班打卡',
                 alive: true,
                 repeat: true,
@@ -50,7 +55,7 @@ function readConfig() {
                 mode: notifyMode.eachDay,
                 time: '18:00',
                 week: null,
-                date: '',
+                date: null,
                 title: '下班打卡',
                 alive: true,
                 repeat: true,
