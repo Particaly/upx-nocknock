@@ -49,7 +49,7 @@ setTimeout(() => {
 
 async function whenClickBox() {
     display.value = false;
-    setTimeout(window.distroySubWindow, 1000)
+    setTimeout(window.destroySubWindow, 1000)
 }
 
 </script>

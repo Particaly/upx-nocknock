@@ -1,19 +1,23 @@
 <template>
-	<div class="main wh-full">
+	<div class="main wh-full" v-if="show">
 		<div class="card-container" v-for="(item, i) in data" :key="i" @click="whenEdit(item)">
+			<svg @click.stop="deleteRule(item)" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 32 32"><path d="M24 9.4L22.6 8L16 14.6L9.4 8L8 9.4l6.6 6.6L8 22.6L9.4 24l6.6-6.6l6.6 6.6l1.4-1.4l-6.6-6.6L24 9.4z" fill="currentColor"></path></svg>
 			<n-input class="title" :default-value="item.title" :on-input="val => whenChangeTitle(item, val)"/>
 			<div class="time">
 				<span @click.stop="showTimeSelector(i)">{{ item.time }}</span>
 				<n-time-picker :formatted-value="item.time"
-				               ref="timepick"
+				               ref="timePick"
 				               value-format="HH:mm"
 				               :on-update:value="v => whenChangeTimeValue(item, v)"
 				               format="HH:mm"/>
 			</div>
 			<div class="notice">{{ item.timeDistance }}</div>
 			<div class="description">{{ getType(item) }}</div>
-			<n-switch class="switch" v-model:value="item.alive"
-			          :on-update:value="val => whenChangeAlive(item, val)"></n-switch>
+			<n-switch class="switch"
+			          v-model:value="item.alive"
+			          :on-update:value="val => whenChangeAlive(item, val)"
+			          @click.stop="() => {}"
+			></n-switch>
 		</div>
 		<div class="add-notify" @click="addNewNotify">
 			<n-icon size="40">
@@ -24,24 +28,20 @@
 				</svg>
 			</n-icon>
 		</div>
-		<n-modal :show="true">
-			<n-card
-				style="width: 300px"
-				:bordered="false"
-				size="huge"
-				role="dialog"
-				aria-modal="true"
-			></n-card>
+		<n-modal :show="state.show">
+			<ClockCreate :mode="state.mode" :rule="state.rule" :close="() => state.show=false" @update="onUpdate"></ClockCreate>
 		</n-modal>
 	</div>
 </template>
 
 <script setup>
 import dayjs from 'dayjs'
-import { computed, ref, onBeforeUnmount, watch } from 'vue'
+import { ref, onBeforeUnmount, reactive, nextTick } from 'vue'
+import ClockCreate from "./clock-create.vue";
 
 const data = ref([])
-const timepick = ref()
+const show = ref(true)
+const timePick = ref()
 const timer = setInterval(() => {
 	const config = window.readConfig()
 	config.forEach(item => {
@@ -50,7 +50,7 @@ const timer = setInterval(() => {
 		const distance = next.unix() - now.unix();
 		const day = Math.floor(distance / (60 * 60 * 24))
 		const hour = Math.floor(distance % (60 * 60 * 24) / (60 * 60))
-		const minute = Math.ceil(distance % (60 * 60) / 60)
+		const minute = Math.floor(distance % (60 * 60) / 60)
 		let str = '还有'
 		if (day) {
 			str += day + '天'
@@ -61,10 +61,20 @@ const timer = setInterval(() => {
 		if (minute) {
 			str += minute + '分'
 		}
-		item.timeDistance = str
+		if (str === '还有') {
+			item.timeDistance = !item.alive ? '已关闭' : str;
+		} else {
+			item.timeDistance = str
+		}
 	})
 	data.value = JSON.parse(JSON.stringify(config));
 }, 1000)
+
+const state = reactive({
+	show: false,
+	rule: null,
+	mode: 'edit'
+})
 
 function whenChangeTimeValue (item, v) {
 	item.time = dayjs(v).format('HH:mm')
@@ -76,12 +86,45 @@ function whenChangeTitle (item, v) {
 	save()
 }
 
-function whenEdit () {
+function whenEdit(rule) {
+	state.mode = "edit";
+	state.rule = JSON.parse(JSON.stringify(rule));
+	state.show = true;
+}
 
+async function onUpdate() {
+	show.value = false;
+	const config = window.readConfig()
+	config.forEach(item => {
+		const next = dayjs(item.nextNotifyTime)
+		const now = dayjs()
+		const distance = next.unix() - now.unix();
+		const day = Math.floor(distance / (60 * 60 * 24))
+		const hour = Math.floor(distance % (60 * 60 * 24) / (60 * 60))
+		const minute = Math.floor(distance % (60 * 60) / 60)
+		let str = '还有'
+		if (day) {
+			str += day + '天'
+		}
+		if (hour) {
+			str += hour + '小时'
+		}
+		if (minute) {
+			str += minute + '分'
+		}
+		if (str === '还有') {
+			item.timeDistance = !item.alive ? '已关闭' : str;
+		} else {
+			item.timeDistance = str
+		}
+	})
+	data.value = JSON.parse(JSON.stringify(config));
+	await nextTick();
+	show.value = true;
 }
 
 function showTimeSelector (i) {
-	const r = timepick.value[i]
+	const r = timePick.value[i]
 	r.handleTriggerClick(window.event)
 	console.log(window.event)
 }
@@ -119,10 +162,16 @@ const columns = [
 	}
 ]
 
+const weekWords = [
+	'一', '二', '三', '四', '五', '六', '日'
+]
 function getType (item) {
+	if (!item.repeat) {
+		return '仅一次'
+	}
 	const notifyMode = {
 		'each-day': '每天提醒',
-		'each-week': '每周提醒',
+		'each-week': `每周${item.week.map(t => weekWords[t - 1]).join('、')}提醒`,
 		'each-month': '每月提醒',
 		'each-year': '每年提醒',
 	}
@@ -130,7 +179,14 @@ function getType (item) {
 }
 
 function addNewNotify () {
+	state.mode = "create";
+	state.rule = null;
+	state.show = true;
+}
 
+function deleteRule(item) {
+	const id = item.id;
+	window.deleteRule(id);
 }
 </script>
 
@@ -141,13 +197,15 @@ function addNewNotify () {
 	height: 100%;
 	overflow: auto;
 	display: flex;
+	flex-wrap: wrap;
 	column-gap: 20px;
 	row-gap: 15px;
 	line-height: 1;
+	align-content: flex-start;
 
 	.card-container {
 		width: 200px;
-		height: 150px;
+		height: fit-content;
 		background: white;
 		border-radius: 10px;
 		padding: 15px;
@@ -157,7 +215,10 @@ function addNewNotify () {
 		filter: drop-shadow(1px 2px 8px rgba(0, 0, 0, 0.1));
 
 		&:hover {
-			filter: drop-shadow(1px 2px 8px rgba(0, 0, 0, 0.2))
+			filter: drop-shadow(1px 2px 8px rgba(0, 0, 0, 0.2));
+			svg {
+				opacity: 1;
+			}
 		}
 
 		.title {
@@ -197,12 +258,25 @@ function addNewNotify () {
 		.description {
 			margin-top: 15px;
 			opacity: 0.6;
+			width: 80%
 		}
 
 		.switch {
 			position: absolute;
 			right: 20px;
 			bottom: 8px
+		}
+
+		svg {
+			transition: opacity 0.4s;
+			opacity: 0;
+			position: absolute;
+			width: 27px;
+			height: 26px;
+			right: 10px;
+			top: 10px;
+			z-index: 10;
+			cursor: pointer;
 		}
 	}
 
